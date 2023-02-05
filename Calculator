@@ -1,0 +1,141 @@
+// Used in google appsscript
+// User inputs are taken from C3, C4, C5, C6, and C7
+// Labels are in B3, B4, B5, B6, and B7
+
+// Stores column numbers
+var firstPowerColumn = 0;
+var lastPowerColumn = 0;
+var firstCommColumn = 0;
+var lastCommColumn = 0;
+var streetlightColumn = 0;
+
+function printRanges() {
+
+  // Opens sheet
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+
+  // Gets users inputs
+  firstPowerColumn = letterToColumn(sheet.getRange('C3').getValue()); 
+  lastPowerColumn = letterToColumn(sheet.getRange('C4').getValue());
+  streetlightColumn = letterToColumn(sheet.getRange('C5').getValue());
+  firstCommColumn = letterToColumn(sheet.getRange('C6').getValue());
+  lastCommColumn = letterToColumn(sheet.getRange('C7').getValue());
+  
+  // Stores last column # with pole data
+  var lastColumnPoleData = sheet.getLastColumn();
+
+  // Adds 6 columns to the end of the sheet
+  sheet.insertColumnsAfter(sheet.getLastColumn(), 6);
+
+  // Loops through every pole
+  for (var currentRow = 2; currentRow <= sheet.getLastRow(); currentRow++) {
+
+    // Gets ranges for pole
+    var openRanges = findOpenRanges(currentRow);
+
+    // Goes through all the ranges in the list
+    for (var range = 0; range < openRanges.length; range++) {
+      // Adds range into cell
+      sheet.getRange(currentRow, lastColumnPoleData + 2 + range).setValue(openRanges[range]);
+    }
+  }
+}
+
+function findOpenRanges(currentRow) {
+
+  // Opens sheet
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+
+  // Set to a number thats gauranteed never to be reached
+  var lowestPower = 9999;
+
+  // Will store the list of comm heights and bounds
+  var commsAndBounds = []
+
+  // Loops from firstPowerColumn to lastCommColumn
+  for (currentColumn = firstPowerColumn; currentColumn <= lastCommColumn; currentColumn++) {
+
+    // Gets value for the current column
+    var value = sheet.getRange(currentRow, currentColumn).getValue();
+    
+    // Checks if current column is power
+    if ((currentColumn >= firstPowerColumn && currentColumn <= lastPowerColumn || currentColumn == streetlightColumn) && typeof value == 'number') {
+      
+      // Stores molded and grounded cell
+      var moldGround = sheet.getRange(currentRow, currentColumn + 1).getValue().toString();
+
+      // Checks for ground and mold
+      if (moldGround.includes('Molded') && moldGround.includes('Grounded')) {
+        value = toInches(value) - 4;
+      } else if (moldGround.includes('Grounded')) {
+        value = toInches(value) - 12;
+      } else {
+        value = toInches(value) - 40;
+      }
+
+      // Checks if power is the lowest power
+      if (value < lowestPower) {
+        lowestPower = value;
+      }
+    }
+
+    // Checks if current column is comm
+    if ((currentColumn >= firstCommColumn && currentColumn <= lastCommColumn) && typeof value == 'number') {
+      commsAndBounds.push(toInches(value));
+    }
+  }
+
+  // Sorts list from greatest to least
+  commsAndBounds = commsAndBounds.sort(function (a, b) {  return b - a;  });
+
+  // Add in top and bottom of commspace
+  commsAndBounds.unshift(lowestPower + 12); // add 12 to offset future lines
+  commsAndBounds.push(toInches(1600) - 12); // subtract 12 to offset future lines
+
+  // Stores open spaces
+  var openRanges = [];
+
+  // Findes spaces between comms and appends to openRanges list
+  for (var upperComm = 0; upperComm < commsAndBounds.length - 1; upperComm++) {
+
+    // Upper and Lower comm are both the index of commsAndBounds
+    var lowerComm = upperComm + 1;
+
+    // Checks for space and append if there is
+    if (commsAndBounds[upperComm] - 12 > commsAndBounds[lowerComm] + 12) {
+      if (commsAndBounds[upperComm] - 12 > 9000) {
+        openRanges.push("????" + " - " + toFeetAndInches(commsAndBounds[lowerComm] + 12));
+      } else {
+        openRanges.push(toFeetAndInches(commsAndBounds[upperComm] - 12) + " - " + toFeetAndInches(commsAndBounds[lowerComm] + 12));
+      }
+    }
+  }
+
+  return openRanges;
+}
+
+function letterToColumn(letter) {
+  var column = 0, length = letter.length;
+  for (var i = 0; i < length; i++){
+    column += (letter.charCodeAt(i) - 64) * Math.pow(26, length - i - 1);
+  }
+  return column;
+}
+
+function toInches(feetAndInches) {
+  var feet = Math.floor(feetAndInches / 100);
+  var inches = feetAndInches % 100;
+
+  return feet * 12 + inches;
+}
+
+function toFeetAndInches(inches) {
+  var feet = Math.floor(inches / 12) * 100;
+  var inchesLeft = inches % 12;
+
+  return feet + inchesLeft;
+}
+
+function test() {
+  console.log(findOpenRanges(2));
+}
